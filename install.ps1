@@ -96,15 +96,22 @@ function Set-ZuvCommands([string]$Root, [bool]$SkipPath) {
     [IO.Directory]::CreateDirectory($bin) | Out-Null
     $shim = @'
 $ErrorActionPreference = 'Stop'
-$root = Split-Path $PSScriptRoot -Parent
+$root = $PSScriptRoot
 $state = Get-Content -LiteralPath (Join-Path $root 'current.json') -Raw | ConvertFrom-Json
 if ($state.version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid ZuvCode installation.' }
 & $state.nodePath (Join-Path $root "versions/$($state.version)/launcher.mjs") @args
 exit $LASTEXITCODE
 '@
+    Write-ZuvAtomic (Assert-ZuvPath $Root (Join-Path $Root 'launch.ps1')) $shim
     foreach ($command in @('zuv', 'zuvcode')) {
-        Write-ZuvAtomic (Assert-ZuvPath $Root (Join-Path $bin "$command.ps1")) $shim
-        Write-ZuvAtomic (Assert-ZuvPath $Root (Join-Path $bin "$command.cmd")) "@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"%~dp0$command.ps1`" %*`r`n"
+        # Only CMD shims belong on PATH: PowerShell would prefer and block a sibling PS1.
+        $legacy = Assert-ZuvPath $Root (Join-Path $bin "$command.ps1")
+        if (Test-Path -LiteralPath $legacy) {
+            $oldShim = $shim.Replace('$root = $PSScriptRoot', '$root = Split-Path $PSScriptRoot -Parent')
+            if (([IO.File]::ReadAllText($legacy)).Trim() -cne $oldShim.Trim()) { throw "Unrecognized command shim: $legacy" }
+            Remove-Item -LiteralPath $legacy -Force
+        }
+        Write-ZuvAtomic (Assert-ZuvPath $Root (Join-Path $bin "$command.cmd")) "@echo off`r`npowershell.exe -NoProfile -ExecutionPolicy Bypass -File `"%~dp0..\launch.ps1`" %*`r`n"
     }
     if (-not $SkipPath) {
         $path = [Environment]::GetEnvironmentVariable('Path', 'User')
@@ -118,7 +125,7 @@ function Install-ZuvCode([string]$Root, [bool]$Silent, [bool]$SkipPath) {
     $Root = [IO.Path]::GetFullPath($Root)
     $null = Assert-ZuvPath $Root (Join-Path $Root 'current.json')
     if ((Test-Path -LiteralPath $Root) -and -not (Test-Path -LiteralPath (Join-Path $Root 'current.json'))) {
-        $unexpected = @(Get-ChildItem -LiteralPath $Root -Force | Where-Object { $_.Name -notmatch '^(install\.lock|\.stage-[a-f0-9]+|versions|runtime|bin|current\.json\.[a-f0-9]+\.tmp)$' })
+        $unexpected = @(Get-ChildItem -LiteralPath $Root -Force | Where-Object { $_.Name -notmatch '^(install\.lock|\.stage-[a-f0-9]+|versions|runtime|bin|launch\.ps1|current\.json\.[a-f0-9]+\.tmp)$' })
         if ($unexpected.Count) { throw 'The installation directory contains unrelated files. Choose an empty directory.' }
     }
     [IO.Directory]::CreateDirectory($Root) | Out-Null
@@ -133,7 +140,7 @@ function Install-ZuvCode([string]$Root, [bool]$Silent, [bool]$SkipPath) {
             if ($current.version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid installed version.' }
             if ([Version]$current.version -ge [Version]$version) {
                 if (-not $Silent) { Write-Host "ZuvCode $($current.version) is up to date." }
-                if (-not $SkipPath) { Set-ZuvCommands $Root $false }
+                Set-ZuvCommands $Root $SkipPath
                 return
             }
         }

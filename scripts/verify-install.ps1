@@ -51,10 +51,13 @@ try {
     Push-Location $project
     try {
         foreach ($command in @('zuv', 'zuvcode')) {
-            $result = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $install "bin/$command.ps1") --version
+            $result = & (Join-Path $install "bin/$command.cmd") --version
             Assert-Test ($LASTEXITCODE -eq 0 -and $result -eq $manifest.version) "$command version failed."
+            $env:Path = (Join-Path $install 'bin') + ';' + $originalPath
+            $restricted = & powershell.exe -NoProfile -ExecutionPolicy Restricted -Command "$command --version"
+            Assert-Test ($LASTEXITCODE -eq 0 -and $restricted -eq $manifest.version) "$command was blocked by PowerShell policy."
         }
-        $report = & powershell.exe -NoProfile -ExecutionPolicy Bypass -File (Join-Path $install 'bin/zuv.ps1') doctor
+        $report = & (Join-Path $install 'bin/zuv.cmd') doctor
         Assert-Test ($LASTEXITCODE -eq 0 -and ($report -join "`n").Contains('unrelated project')) ("Launch directory check failed: " + ($report -join "`n"))
         Assert-Test (Test-Path -LiteralPath (Join-Path $project '.zuvcode/state.db')) 'Fresh project state missing.'
     } finally { Pop-Location }
@@ -93,12 +96,19 @@ try {
     [IO.File]::WriteAllText((Join-Path $fixture 'release.json'), ($manifest | ConvertTo-Json))
     $script:archive = Join-Path $base 'upgrade.zip'
     [IO.Compression.ZipFile]::CreateFromDirectory($fixture, $script:archive)
+    $oldShim = ([IO.File]::ReadAllText((Join-Path $install 'launch.ps1'))).Replace('$root = $PSScriptRoot', '$root = Split-Path $PSScriptRoot -Parent')
+    foreach ($command in @('zuv', 'zuvcode')) { [IO.File]::WriteAllText((Join-Path $install "bin/$command.ps1"), $oldShim) }
     Install-ZuvCode $install $true $true
     $after = Get-Content $currentPath -Raw | ConvertFrom-Json
     Assert-Test ($after.version -eq $script:offeredVersion) 'Upgrade did not activate.'
     Assert-Test (Test-Path -LiteralPath (Join-Path $install "versions/$((ConvertFrom-Json $before).version)/app/index.js")) 'Upgrade removed an existing version.'
     Assert-Test ((Get-Content (Join-Path $env:ZUVCODE_HOME 'preserve.txt') -Raw) -eq 'User credentials and preferences stay here.') 'Upgrade changed user data.'
     Assert-Test (Test-Path -LiteralPath (Join-Path $project '.zuvcode/state.db')) 'Upgrade removed project history.'
+    foreach ($command in @('zuv', 'zuvcode')) {
+        Assert-Test (-not (Test-Path -LiteralPath (Join-Path $install "bin/$command.ps1"))) 'Legacy PowerShell shim still shadows the command.'
+        $restricted = & powershell.exe -NoProfile -ExecutionPolicy Restricted -Command "$command --version"
+        Assert-Test ($LASTEXITCODE -eq 0 -and $restricted -eq $after.version) 'Upgraded command was blocked by PowerShell policy.'
+    }
 
     $env:Path = ''
     $env:ZUVCODE_AUTO_UPDATE = '1'
@@ -106,7 +116,7 @@ try {
     $fallback = & $node (Join-Path $install "versions/$($after.version)/launcher.mjs") --version 2>&1
     $ErrorActionPreference = 'Stop'
     Assert-Test ($LASTEXITCODE -eq 0 -and ($fallback -join "`n").Contains($after.version)) 'Unavailable updater prevented normal startup.'
-    Write-Host 'PASS: portable install, both commands, cwd, atomic upgrade, retained versions/settings/history, checksum/manifest rejection, offline fallback, lock and ZIP traversal protection.'
+    Write-Host 'PASS: portable install, both commands under Restricted policy, legacy shim migration, cwd, atomic upgrade, retained versions/settings/history, checksum/manifest rejection, offline fallback, lock and ZIP traversal protection.'
 } finally {
     $env:Path = $originalPath
     $env:ZUVCODE_HOME = $originalHome

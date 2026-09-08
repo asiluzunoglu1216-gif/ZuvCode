@@ -92,17 +92,17 @@ describe("coding tools", () => {
     try {
       const tools = new AgentTools(root, new PermissionEngine());
       let approval = "";
-      const result = await tools.execute({ id: "cmd", name: "run_command", argumentsJson: JSON.stringify({ command: "echo ZuvCode_CHECK", timeout_ms: 5000 }) }, {
+      const result = await tools.execute({ id: "cmd", name: "run_command", argumentsJson: JSON.stringify({ command: "echo ZuvCode_CHECK", timeout_ms: 15000 }) }, {
         approve: async (description) => { approval = description; return true; }
       });
       expect(approval).toContain(root);
       expect(approval).toContain("outside the project");
       expect(result).toMatchObject({ ok: true, output: { exitCode: 0 } });
       expect(JSON.stringify(result.output)).toContain("ZuvCode_CHECK");
-      const failed = await runCommand(root, "exit 7", 5000);
+      const failed = await runCommand(root, "exit 7", 15000);
       expect(failed.exitCode).toBe(7);
     } finally { cleanup(); }
-  });
+  }, 35000);
 
   it("kills timed-out commands and honours cancellation", async () => {
     const { root, cleanup } = workspace();

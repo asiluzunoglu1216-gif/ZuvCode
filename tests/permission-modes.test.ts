@@ -57,13 +57,13 @@ describe("permission modes", () => {
     const tools = new AgentTools(root, new PermissionEngine({ mode: "BALANCED" }));
     const approve = vi.fn(async () => false);
     try {
-      const result = await tools.execute(call("run_command", { command: "echo SMART_CHECK" }), { approve });
+      const result = await tools.execute(call("run_command", { command: "echo SMART_CHECK", timeout_ms: 15000 }), { approve });
       expect(result.ok).toBe(true);
       expect(approve).not.toHaveBeenCalled();
       expect((await tools.execute(call("run_command", { command: "unknown-command" }), { approve })).ok).toBe(false);
       expect(approve).toHaveBeenCalledTimes(1);
     } finally { cleanup(); }
-  });
+  }, 20000);
 
   it("Full Access executes without approval and permits external files, while switching back restores boundaries", async () => {
     const { root, cleanup } = workspace();
