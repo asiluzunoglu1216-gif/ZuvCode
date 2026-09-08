@@ -1,0 +1,33 @@
+{
+  "name": "@zuvcode/orchestration",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@zuvcode/agents": "workspace:*",
+    "@zuvcode/core": "workspace:*",
+    "@zuvcode/memory": "workspace:*",
+    "@zuvcode/model-router": "workspace:*",
+    "@zuvcode/permissions": "workspace:*",
+    "@zuvcode/persistence": "workspace:*",
+    "@zuvcode/project": "workspace:*",
+    "@zuvcode/providers": "workspace:*",
+    "@zuvcode/protocol": "workspace:*",
+    "@zuvcode/shared": "workspace:*",
+    "@zuvcode/skills": "workspace:*",
+    "@zuvcode/tasks": "workspace:*",
+    "@zuvcode/tools": "workspace:*",
+    "typescript": "^5.9.3"
+  }
+}

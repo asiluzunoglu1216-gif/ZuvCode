@@ -1,0 +1,25 @@
+{
+  "name": "@zuvcode/tools",
+  "version": "0.1.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@zuvcode/permissions": "workspace:*",
+    "@zuvcode/protocol": "workspace:*",
+    "@zuvcode/shared": "workspace:*",
+    "cheerio": "^1.2.0",
+    "undici": "^8.10.2",
+    "zod": "^4.1.13"
+  }
+}

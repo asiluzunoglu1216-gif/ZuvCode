@@ -1,0 +1,21 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/shared" },
+    { "path": "./packages/core" },
+    { "path": "./packages/protocol" },
+    { "path": "./packages/persistence" },
+    { "path": "./packages/permissions" },
+    { "path": "./packages/providers" },
+    { "path": "./packages/model-router" },
+    { "path": "./packages/agents" },
+    { "path": "./packages/tasks" },
+    { "path": "./packages/tools" },
+    { "path": "./packages/project" },
+    { "path": "./packages/memory" },
+    { "path": "./packages/skills" },
+    { "path": "./packages/orchestration" },
+    { "path": "./packages/terminal-ui" },
+    { "path": "./apps/cli" }
+  ]
+}

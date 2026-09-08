@@ -1,0 +1,24 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "src",
+    "outDir": "dist"
+  },
+  "references": [
+    { "path": "../shared" },
+    { "path": "../core" },
+    { "path": "../protocol" },
+    { "path": "../persistence" },
+    { "path": "../providers" },
+    { "path": "../model-router" },
+    { "path": "../agents" },
+    { "path": "../tasks" },
+    { "path": "../permissions" },
+    { "path": "../tools" },
+    { "path": "../project" },
+    { "path": "../memory" },
+    { "path": "../skills" }
+  ],
+  "include": ["src/**/*.ts"]
+}

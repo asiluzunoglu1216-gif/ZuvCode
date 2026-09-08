@@ -1,0 +1,32 @@
+{
+  "name": "@zuvcode/cli",
+  "version": "0.1.0",
+  "type": "module",
+  "bin": {
+    "zuvcode": "./dist/index.js",
+    "zuv": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "types": "./dist/index.d.ts",
+  "main": "./dist/index.js",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "node dist/index.js",
+    "typecheck": "tsc -b --pretty false"
+  },
+  "dependencies": {
+    "@zuvcode/orchestration": "workspace:*",
+    "@zuvcode/persistence": "workspace:*",
+    "@zuvcode/protocol": "workspace:*",
+    "@zuvcode/providers": "workspace:*",
+    "@zuvcode/shared": "workspace:*",
+    "@zuvcode/terminal-ui": "workspace:*",
+    "chalk": "^5.6.2",
+    "commander": "^14.0.2"
+  }
+}

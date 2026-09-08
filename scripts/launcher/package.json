@@ -1,0 +1,11 @@
+{
+  "name": "zuvcode-local-cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "zuvcode": "zuvcode.mjs",
+    "zuv": "zuvcode.mjs"
+  },
+  "engines": { "node": "^22.13.0 || >=23.5.0" }
+}

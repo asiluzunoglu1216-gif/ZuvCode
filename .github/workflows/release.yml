@@ -1,0 +1,54 @@
+name: Verify and Release
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: pnpm/action-setup@f40ffcd9367d9f12939873eb1018b921a783ffaa # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: 24.20.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: node scripts/check-publish.mjs
+      - run: pnpm build
+      - run: pnpm test --no-file-parallelism
+      - run: node scripts/verify-terminal.mjs
+      - name: Build portable release
+        run: node scripts/build-release.mjs
+        env:
+          ZUVCODE_RELEASE_VERSION: 0.1.${{ github.run_number }}
+      - name: Verify installer and offline update recovery
+        run: powershell.exe -NoProfile -ExecutionPolicy Bypass -File scripts/verify-install.ps1
+      - name: Publish tested release
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_VERSION: 0.1.${{ github.run_number }}
+        run: |
+          $tag = "v$env:RELEASE_VERSION"
+          gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) { Write-Host 'Release already exists; never replace published artifacts.'; exit 0 }
+          gh release create $tag artifacts/zuvcode.zip artifacts/SHA256SUMS artifacts/install.ps1 --draft --target $env:GITHUB_SHA --title "ZuvCode $tag" --notes "Automatically built and tested Windows release. Install with install.ps1. Existing managed installations update on launch."
+          if ($LASTEXITCODE -ne 0) { throw 'Draft release upload failed.' }
+          gh release edit $tag --draft=false --latest
+          if ($LASTEXITCODE -ne 0) { throw 'Release publication failed.' }
