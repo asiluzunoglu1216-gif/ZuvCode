@@ -161,7 +161,8 @@ export function runCommand(root: string, command: string, timeoutMs: number, sig
       if (process.env[key]) env[key] = process.env[key];
     }
     if (windows && !env.PATHEXT) env.PATHEXT = ".COM;.EXE;.BAT;.CMD";
-    const child = spawn(windows ? "powershell.exe" : "/bin/sh", windows ? ["-NoProfile", "-NonInteractive", "-Command", `$ErrorActionPreference = 'Stop'; [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); $OutputEncoding = [Console]::OutputEncoding; ${command}; if ($LASTEXITCODE) { exit $LASTEXITCODE }`] : ["-c", command], {
+    // Resolve built-in cmdlets before scanning potentially large third-party module directories.
+    const child = spawn(windows ? "powershell.exe" : "/bin/sh", windows ? ["-NoProfile", "-NonInteractive", "-Command", `$ErrorActionPreference = 'Stop'; $env:PSModulePath = "$PSHOME\\Modules;" + $env:PSModulePath; [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false); $OutputEncoding = [Console]::OutputEncoding; ${command}; if ($LASTEXITCODE) { exit $LASTEXITCODE }`] : ["-c", command], {
       cwd: root, env, windowsHide: true, detached: !windows, stdio: ["ignore", "pipe", "pipe"]
     });
     let stdout = "", stderr = "", timedOut = false, truncated = false, stopping = false;

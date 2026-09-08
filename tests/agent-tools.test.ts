@@ -97,12 +97,22 @@ describe("coding tools", () => {
       });
       expect(approval).toContain(root);
       expect(approval).toContain("outside the project");
-      expect(result).toMatchObject({ ok: true, output: { exitCode: 0 } });
+      expect(result, JSON.stringify(result)).toMatchObject({ ok: true, output: { exitCode: 0 } });
       expect(JSON.stringify(result.output)).toContain("ZuvCode_CHECK");
       const failed = await runCommand(root, "exit 7", 15000);
       expect(failed.exitCode).toBe(7);
     } finally { cleanup(); }
   }, 35000);
+
+  it.skipIf(process.platform !== "win32")("loads built-in PowerShell modules before third-party module directories", async () => {
+    const { root, cleanup } = workspace();
+    try {
+      const result = await runCommand(root, '[Console]::WriteLine(($env:PSModulePath -split ";")[0]); Write-Output ZUV_MODULE_CHECK; Get-Date -Format yyyy', 15000);
+      expect(result, JSON.stringify(result)).toMatchObject({ exitCode: 0, timedOut: false });
+      expect(result.stdout.split(/\r?\n/)[0]).toMatch(/WindowsPowerShell\\v1\.0\\Modules$/i);
+      expect(result.stdout).toContain("ZUV_MODULE_CHECK");
+    } finally { cleanup(); }
+  }, 20000);
 
   it("kills timed-out commands and honours cancellation", async () => {
     const { root, cleanup } = workspace();

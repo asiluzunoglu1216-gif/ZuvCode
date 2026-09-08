@@ -58,7 +58,7 @@ describe("permission modes", () => {
     const approve = vi.fn(async () => false);
     try {
       const result = await tools.execute(call("run_command", { command: "echo SMART_CHECK", timeout_ms: 15000 }), { approve });
-      expect(result.ok).toBe(true);
+      expect(result.ok, JSON.stringify(result)).toBe(true);
       expect(approve).not.toHaveBeenCalled();
       expect((await tools.execute(call("run_command", { command: "unknown-command" }), { approve })).ok).toBe(false);
       expect(approve).toHaveBeenCalledTimes(1);
