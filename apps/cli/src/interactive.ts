@@ -34,7 +34,7 @@ async function interactiveShell(runtime: ZuvCodeRuntime): Promise<void> {
       }
       history.unshift(line);
       history.splice(200);
-      console.log(`\n${theme.accent("> ")}${plain(line)}\n`);
+      console.log(`\n${theme.accent("> ")}${line.split("\n").map(plain).join("\n  ")}\n`);
       try {
         if (await handleLine(runtime, line, true, welcome)) break;
       } catch (error) {
@@ -51,8 +51,9 @@ async function handleLine(runtime: ZuvCodeRuntime, line: string, interactive: bo
     await runCodingRequest(runtime, line);
     return false;
   }
-  const [command = "", ...parts] = line.slice(1).split(/\s+/);
-  const args = parts.join(" ");
+  const command = /^\/(\S*)/.exec(line)?.[1] ?? "";
+  const args = line.slice(command.length + 1).trim();
+  const parts = args ? args.split(/\s+/) : [];
   if (command === "exit") return true;
   switch (command) {
     case "": console.log(renderCommandPalette()); break;

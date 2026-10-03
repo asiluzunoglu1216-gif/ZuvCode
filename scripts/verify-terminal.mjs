@@ -34,11 +34,15 @@ for (const [cols, rows] of [[100, 36], [42, 26]]) {
   const ready = () => cursorLine() === ">";
   const wait = async (predicate, label, timeout = 6000) => {
     const deadline = Date.now() + timeout;
-    while (!predicate()) {
+    let stableSince = 0;
+    while (true) {
+      if (predicate()) {
+        stableSince ||= Date.now();
+        if (Date.now() - stableSince >= 120) return;
+      } else stableSince = 0;
       if (exited || Date.now() > deadline) throw new Error(`${cols} columns: ${label}\n${screen()}`);
       await setTimeout(25);
     }
-    await setTimeout(30);
   };
   const capture = (name) => {
     writeFileSync(join(captures, `${cols}-${name}.txt`), screen());
@@ -77,6 +81,19 @@ for (const [cols, rows] of [[100, 36], [42, 26]]) {
     capture("typing");
     child.write("\r");
     await wait(() => screen().includes("REPLY: merhaba") && ready(), "model response and next input");
+    const requests = () => readFileSync(join(root, "requests.jsonl"), "utf8").trim().split("\n").map((line) => JSON.parse(line));
+    for (const framed of [false, true]) {
+      const text = `paste-${framed}\n\n  indented code\nlast pasted line`;
+      const count = requests().length;
+      child.write(framed ? `\x1b[200~${text}\x1b[201~` : text.replace(/\n/g, "\r\n"));
+      await wait(() => cursorLine().trim() === "last pasted line", "multiline paste remains editable");
+      await setTimeout(150);
+      assert.equal(requests().length, count, "Pasting must not contact the model before Enter");
+      capture(`paste-${framed ? "framed" : "legacy"}`);
+      child.write("\r");
+      await wait(() => requests().length === count + 1 && ready(), "one complete pasted message");
+      assert.equal(requests().at(-1).task, text, "The model must receive every line including indentation and blank lines");
+    }
     for (let i = 0; i < 3; i++) {
       child.write(`message-${i}`);
       await wait(() => cursorLine() === `> message-${i}`, "typing after chat");
@@ -120,13 +137,16 @@ for (const [cols, rows] of [[100, 36], [42, 26]]) {
     const beforeTeam = new DatabaseSync(join(root, ".zuvcode", "state.db"), { readOnly: true });
     try { assert.equal(beforeTeam.prepare("SELECT count(*) AS count FROM agents").get().count, 0, "ordinary chat must not start a team"); }
     finally { beforeTeam.close(); }
-    child.write("/team build frontend backend and ui-ux\r");
+    child.write("\x1b[200~/team build frontend\nbackend and ui-ux\x1b[201~");
+    await wait(() => cursorLine().trim() === "backend and ui-ux", "multiline team goal draft");
+    child.write("\r");
     await wait(() => screen().includes("Use an items array"), "live peer objection", 15000);
     capture("team-discussion");
     const unapproved = new DatabaseSync(join(root, ".zuvcode", "state.db"), { readOnly: true });
     try { assert.equal(unapproved.prepare("SELECT count(*) AS count FROM tasks").get().count, 0, "no tasks may execute before agreement"); }
     finally { unapproved.close(); }
     await wait(() => screen().includes("TEAM VERIFIED") && ready(), "discussion, agreement and specialist execution", 15000);
+    assert.ok(requests().some((request) => request.planning && request.task.includes("build frontend\nbackend and ui-ux")), "Team goals retain pasted newlines");
     const state = new DatabaseSync(join(root, ".zuvcode", "state.db"), { readOnly: true });
     let taskId;
     try { taskId = state.prepare("SELECT id FROM tasks WHERE title = 'Verify team page'").get().id; }

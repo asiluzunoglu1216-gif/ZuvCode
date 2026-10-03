@@ -1,6 +1,6 @@
 import { createServer } from "node:http";
 import { once } from "node:events";
-import { existsSync } from "node:fs";
+import { existsSync, appendFileSync } from "node:fs";
 import { join } from "node:path";
 import { setTimeout } from "node:timers/promises";
 import { ZuvCodeRuntime } from "../../packages/orchestration/dist/index.js";
@@ -24,6 +24,7 @@ const server = createServer(async (request, response) => {
   const start = messages.findLastIndex((message) => message.role === "user");
   const task = messages[start]?.content;
   const system = messages[0]?.content ?? "";
+  appendFileSync(join(root, "requests.jsonl"), JSON.stringify({ task, planning: system.includes("PLANNING-ONLY") }) + "\n");
   if (system.includes("PLANNING-ONLY")) {
     budgetGoal = task.includes("budget-check");
     proposalRound++;

@@ -1,4 +1,4 @@
-import { createPrompt, useState, useKeypress, useEffect, usePagination, isEnterKey } from "@inquirer/core";
+import { createPrompt, useState, useRef, useKeypress, useEffect, usePagination, isEnterKey } from "@inquirer/core";
 import type { Prompt } from "@inquirer/type";
 import { commandName, filterCommands } from "./help.js";
 import { fit, pad, plain, terminalWidth, theme } from "./format.js";
@@ -13,6 +13,8 @@ interface CommandPromptConfig {
 
 export const commandPrompt: Prompt<string, CommandPromptConfig> = terminalPrompt(createPrompt<string, CommandPromptConfig>((config, done) => {
   const [value, setValue] = useState("");
+  const [row, setRow] = useState(0);
+  const cursor = useRef(0);
   const [active, setActive] = useState(0);
   const [dismissed, setDismissed] = useState(false);
   const [historyIndex, setHistoryIndex] = useState(-1);
@@ -20,18 +22,46 @@ export const commandPrompt: Prompt<string, CommandPromptConfig> = terminalPrompt
   const [width, setWidth] = useState(terminalWidth());
   const [rows, setRows] = useState(process.stdout.rows || 30);
   const [finished, setFinished] = useState(false);
-  const items = value.startsWith("/") && !dismissed ? filterCommands(value) : [];
-  const menuOpen = value.startsWith("/") && !dismissed && !value.includes(" <");
+  const lines = value.split("\n");
+  const items = value.startsWith("/") && lines.length === 1 && !dismissed ? filterCommands(value) : [];
+  const menuOpen = value.startsWith("/") && lines.length === 1 && !dismissed && !value.includes(" <");
   const pageSize = Math.min(9, Math.max(2, rows - 9));
 
-  useEffect(() => {
+  useEffect((rl) => {
+    rl.output.unmute();
+    rl.output.write("\x1b[?2004h");
+    rl.output.mute();
     const resize = () => { setWidth(terminalWidth()); setRows(process.stdout.rows || 30); };
     process.stdout.on("resize", resize);
-    return () => { process.stdout.off("resize", resize); };
+    return () => {
+      process.stdout.off("resize", resize);
+      rl.output.unmute();
+      rl.output.write("\x1b[?2004l");
+      rl.output.mute();
+    };
   }, []);
 
   useKeypress((key, rl) => {
-    const replace = (next: string) => { rl.clearLine(0); rl.write(next); setValue(next); };
+    const editor = rl as typeof rl & { cursor: number };
+    const replace = (next: string, nextRow = next.split("\n").length - 1, column?: number) => {
+      const line = next.split("\n")[nextRow] ?? "";
+      editor.line = line;
+      editor.cursor = Math.min(column ?? line.length, line.length);
+      cursor.current = editor.cursor;
+      setRow(nextRow);
+      setValue(next);
+    };
+    const insert = (text: string, column = editor.cursor) => {
+      const line = lines[row] ?? "";
+      const inserted = (line.slice(0, column) + text).split("\n");
+      const next = [...lines.slice(0, row), ...inserted.slice(0, -1), inserted.at(-1)! + line.slice(column), ...lines.slice(row + 1)];
+      replace(next.join("\n"), row + inserted.length - 1, inserted.at(-1)!.length);
+      setDismissed(true);
+      setHistoryIndex(-1);
+    };
+    const paste = key as typeof key & { text?: string };
+    if (key.name === "zuv-paste" && paste.text !== undefined) { insert(paste.text); return; }
+    if ((key.ctrl && key.name === "j") || (key.shift && isEnterKey(key))) { insert("\n", cursor.current); return; }
     if (key.ctrl && key.name === "d" && !value) { done("/exit"); return; }
     if (key.name === "escape") { setDismissed(true); return; }
     if (menuOpen && items.length && (key.name === "up" || key.name === "down")) {
@@ -55,6 +85,11 @@ export const commandPrompt: Prompt<string, CommandPromptConfig> = terminalPrompt
       return;
     }
     if (!menuOpen && (key.name === "up" || key.name === "down")) {
+      if (lines.length > 1) {
+        const nextRow = Math.max(0, Math.min(lines.length - 1, row + (key.name === "up" ? -1 : 1)));
+        replace(value, nextRow, cursor.current);
+        return;
+      }
       if (historyIndex === -1) setDraft(value);
       const next = Math.max(-1, Math.min(config.history.length - 1, historyIndex + (key.name === "up" ? 1 : -1)));
       setHistoryIndex(next);
@@ -62,8 +97,20 @@ export const commandPrompt: Prompt<string, CommandPromptConfig> = terminalPrompt
       setDismissed(true);
       return;
     }
-    if (rl.line !== value) { setActive(0); setDismissed(false); setHistoryIndex(-1); }
-    setValue(rl.line);
+    if (row > 0 && cursor.current === 0 && (key.name === "backspace" || key.name === "left")) {
+      const previous = lines[row - 1]!;
+      if (key.name === "backspace") replace([...lines.slice(0, row - 1), previous + lines[row], ...lines.slice(row + 1)].join("\n"), row - 1, previous.length);
+      else replace(value, row - 1, previous.length);
+      return;
+    }
+    if (row < lines.length - 1 && cursor.current === lines[row]!.length && (key.name === "delete" || key.name === "right")) {
+      if (key.name === "delete") replace([...lines.slice(0, row), lines[row]! + lines[row + 1], ...lines.slice(row + 2)].join("\n"), row, cursor.current);
+      else replace(value, row + 1, 0);
+      return;
+    }
+    if (rl.line !== lines[row]) { setActive(0); setDismissed(false); setHistoryIndex(-1); }
+    cursor.current = editor.cursor;
+    setValue([...lines.slice(0, row), rl.line, ...lines.slice(row + 1)].join("\n"));
   });
 
   const page = usePagination({
@@ -82,5 +129,14 @@ export const commandPrompt: Prompt<string, CommandPromptConfig> = terminalPrompt
   const bottom = menuOpen && items.length
     ? `${rule}\n${page}\n${theme.muted(`  ${items.length} command${items.length === 1 ? "" : "s"}`)}\n${status}`
     : `${rule}\n${status}`;
-  return [`${rule}\n${theme.accent("> ")}${value}`, bottom];
-}));
+  const visibleRows = Math.max(1, Math.min(9, rows - 8));
+  const first = Math.max(0, Math.min(row - Math.floor(visibleRows / 2), lines.length - visibleRows));
+  const last = Math.min(lines.length, first + visibleRows);
+  const renderLine = (line: string, index: number) => `${index === 0 ? theme.accent("> ") : "  "}${fit(line, width - 2)}`;
+  const before = lines.slice(first, row).map((line, offset) => renderLine(line, first + offset));
+  const after = lines.slice(row + 1, last).map((line, offset) => renderLine(line, row + 1 + offset));
+  if (first > 0) before.unshift(theme.muted(`  ... ${first} lines`));
+  if (last < lines.length) after.push(theme.muted(`  ... ${lines.length - last} lines`));
+  const content = [rule, ...before, `${row === 0 ? theme.accent("> ") : "  "}${lines[row]}`].join("\n");
+  return [content, [...after, bottom].join("\n")];
+}), { paste: true });

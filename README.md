@@ -98,6 +98,8 @@ Choose Enter a model ID in `/model`. It asks only for the model ID when one prov
 
 Typing `/` opens the live command menu immediately. `/m` leaves only commands beginning with `m`. Up/Down selects a command, Tab completes it, Enter accepts it, and Escape closes the menu. Commands that need arguments leave the cursor ready for your text. Up/Down outside the menu recalls session input history. `/clear` starts a fresh conversation; `/exit` closes ZuvCode.
 
+Paste a multi-line prompt directly into the composer. It stays as one editable draft, including blank lines and indentation, until you press Enter. Use Ctrl+J to add a line while composing by keyboard.
+
 Plain text starts a single-agent coding task with the selected model and conversation history. Asking for HTML or a feature instructs the model to create/edit real files in the current directory. Asking explicitly for code-only output or an explanation does not require file changes. `zuvcode run <goal>` uses the same coding tools. Only `/team` starts teamwork in the interactive shell.
 
 The live activity view shows short task plans, reads, writes, searches, elapsed time, and actual tool outcomes. It does not expose private reasoning. Escape cancels work; completed file changes are preserved. `/changes` lists this session's changed files.
